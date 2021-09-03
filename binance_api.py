@@ -1,6 +1,6 @@
 
 import time
-import sys
+#import sys
 #import win32api
 import csv
 from binance import Client
@@ -20,17 +20,18 @@ def get_api():
 API_KEY, API_SECRET = get_api()
 
 
-#TO_TRADE = 'BTCUSDT'
+TO_TRADE = 'BTCUSDT'
 #TO_TRADE = 'ETHUSDT'
-TO_TRADE = 'ADAUSDT'
-#QUANTITY = 0.001
+#TO_TRADE = 'ADAUSDT'
+QUANTITY = 0.001
 #QUANTITY = 0.015
-QUANTITY = 18
+#QUANTITY = 18
 
 BTCUSDT = {'to_trade': 'BTCUSDT', 'quantity': 0.001}
 
 #RANGE = 90
-RANGE = 30
+RANGE = 60
+#RANGE = 30
 TOP = 1.0002
 #BOT = 0.998
 BOT = 0.995
@@ -41,32 +42,9 @@ UBUNTU_PATH = "/home/ubuntu/TradingBot/"
 LOGFILE_NAME = LOGFILE_NAME if platform == "win32" else (UBUNTU_PATH + LOGFILE_NAME)
 
 
-def safety_stop(client):
-    while True:
-        try:
-            #QUANTITY abfragen bzw alles verkaufen was man hat
-            # client.order_market_sell(symbol=TO_TRADE, quantity=QUANTITY)
-            sys.exit()
-        except:
-            continue
-
-
 class HelpFunctions:
     def __init__(self, client):
         self.client = client
-
-    def get_avg_price(self, error_counter, t):
-        t = datetime.fromtimestamp(t)
-        threshold = timedelta(seconds=30)
-        safety_stop_thr = timedelta(seconds=300)
-        try:
-            return float(self.client.get_avg_price(symbol=TO_TRADE)['price']), error_counter
-        except:
-            error_counter[-1][1] += 1 if t - error_counter[-1][0] < threshold else error_counter.append([t, 1])
-            time.sleep(1)
-            safety_stop(self.client) if t - error_counter[-1][0] > safety_stop_thr else ()
-            print(error_counter)
-            self.get_avg_price(error_counter, time.time())
 
     def write_csv(self, to_write, m='a'):
         with open(LOGFILE_NAME, m) as file:
@@ -78,7 +56,9 @@ class HelpFunctions:
 class TradingBot(HelpFunctions):
     def __init__(self):
         self.client = Client(API_KEY, API_SECRET)
-        print(self.client.get_account())
+        #self.client.order_market_sell(symbol=TO_TRADE, quantity=QUANTITY)
+        #self.client.order_market_buy(symbol=TO_TRADE, quantity=QUANTITY)
+        print(float(self.client.get_margin_price_index(symbol=TO_TRADE)['price']))
 
         self.last_prices = [-1.0 for _ in range(RANGE)]
         self.bought_at = 1
@@ -87,13 +67,11 @@ class TradingBot(HelpFunctions):
 
         self.result = 0.0
 
-        #self.error_counter = {'ReadTimeout': [[datetime.fromtimestamp(time.time()), 0]]}
-
         super().__init__(self.client)
 
     def trade(self):
         is_bought = False
-        self.price_when_started = float(self.client.get_avg_price(symbol=TO_TRADE)['price'])
+        self.price_when_started = float(self.client.get_margin_price_index(symbol=TO_TRADE)['price'])
         print("price when started", self.price_when_started)
         t = datetime.fromtimestamp(time.time())
         to_write = [["Started at", t], ["Price when started: ", str(self.price_when_started).replace('.', ','), "USD"]]
@@ -108,9 +86,8 @@ class TradingBot(HelpFunctions):
         while True:
             t = time.time()
 
-            #act_price, self.error_counter['ReadTimeout'] = self.get_avg_price(self.error_counter['ReadTimeout'], t)
             try:
-                act_price = float(self.client.get_avg_price(symbol=TO_TRADE)['price'])
+                act_price = float(self.client.get_margin_price_index(symbol=TO_TRADE)['price'])
             except:
                 print("Exception!", "get_avg_price failed", "bad connection")
                 self.write_csv([["Bad Connection"]])
@@ -134,10 +111,11 @@ class TradingBot(HelpFunctions):
                 change_30 = self.last_prices[-1] / self.last_prices[0]
                 if change_30 > 1.0:
                     print("BUY!!!")
-                    # order = self.client.order_market_buy(symbol=TO_TRADE, quantity=QUANTITY)
-                    # print(order)
+                    order = self.client.order_market_buy(symbol=TO_TRADE, quantity=QUANTITY)
+                    print(order)
                     is_bought = True
-                    self.bought_at = act_price
+                    # self.bought_at = act_price
+                    self.bought_at = float(order['fills'][0]['price'])
                     #to_write.append("BUY!!!")
 
                     print(datetime.fromtimestamp(t) + timedelta(hours=2))
@@ -151,9 +129,10 @@ class TradingBot(HelpFunctions):
                 change = act_price / self.bought_at
                 if change > TOP or change < BOT:
                     print("SELL!!")
-                    # order = self.client.order_market_sell(symbol=TO_TRADE, quantity=QUANTITY)
-                    # print(order)
+                    order = self.client.order_market_sell(symbol=TO_TRADE, quantity=QUANTITY)
+                    print(order)
                     is_bought = False
+                    # nicht act_price sondern sold at!!!
                     self.result += (act_price - self.bought_at) * QUANTITY
                     #to_write.append("SELL!!!")
 
@@ -166,7 +145,7 @@ class TradingBot(HelpFunctions):
                     self.write_csv(to_write)
 
             self.time_counter += 1
-            time.sleep(0.75)
+            time.sleep(0.5)
             t_end = time.time()
             #print(t_end - t)
 
