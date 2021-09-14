@@ -60,7 +60,7 @@ def f(content):
 def f2(time_delta):
     t = time_delta / 60
     if t < 1:
-        return str(int(t)) + 's'
+        return str(round(time_delta, 1)) + 's'
     else:
         min = int(t)
         s = int((t - min) * 60)
@@ -175,13 +175,17 @@ class TradingBot(HelpFunctions):
 
                         # for logging
                         bought_at = price_to_compare
+                        print(bought_at)
                         time_bought = t
 
             '''second state: crypto is bought'''
             if is_bought:
                 change = curr_price / price_to_compare  # percent, e.g. 0.998, 1.002
+                print(change, curr_price, price_to_compare)
                 if change > TOP:
-                    price_to_compare += price_to_compare * TOP  # update the price to calculate
+                    price_to_compare = price_to_compare * change  # update the price to calculate
+                    print(change)
+                    print(price_to_compare)
 
                 elif change < BOT:  # sell
                     '''Attention, next line is ordering with real money!'''
@@ -193,6 +197,7 @@ class TradingBot(HelpFunctions):
 
                         # for logging
                         sold_at = float(order['fills'][0]['price'])
+                        print(sold_at)
                         fee = (bought_at + sold_at) * TRADING_FEE * QUANTITY
                         change_percent = sold_at / bought_at - TRADING_FEE
                         time_hold = t - time_bought
